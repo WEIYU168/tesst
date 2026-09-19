@@ -1,0 +1,700 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>天寺夜遊 - 記承天寺夜遊</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@300;400;700&display=swap" rel="stylesheet">
+    
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #050608; /* 極深的夜空色 */
+            font-family: 'Noto Serif TC', serif;
+            touch-action: none; /* 防止手機端滑動螢幕干擾遊戲 */
+            user-select: none;
+        }
+        
+        #game-canvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        .text-glow {
+            text-shadow: 0 0 10px rgba(255, 255, 255, 0.5), 0 0 20px rgba(255, 255, 255, 0.3);
+        }
+
+        .fade-transition {
+            transition: opacity 1.5s ease-in-out;
+        }
+        
+        /* 隱藏原生捲軸 */
+        ::-webkit-scrollbar {
+            display: none;
+        }
+
+        /* 封面畫面 */
+        #title-screen {
+            position: fixed;
+            inset: 0;
+            z-index: 100;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: opacity 1.5s ease-in-out;
+        }
+
+        #title-screen .cover-bg {
+            position: absolute;
+            inset: 0;
+            background-image: url('封面.png');
+            background-size: cover;
+            background-position: center;
+        }
+
+        #title-screen .cover-overlay {
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(
+                to bottom,
+                rgba(3, 4, 8, 0.35) 0%,
+                rgba(3, 4, 8, 0.15) 40%,
+                rgba(3, 4, 8, 0.65) 80%,
+                rgba(3, 4, 8, 0.92) 100%
+            );
+        }
+
+        #title-screen .title-content {
+            position: relative;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 1.2rem;
+            margin-top: auto;
+            padding-bottom: 8vh;
+        }
+
+        #title-screen .title-zh {
+            font-family: 'Noto Serif TC', serif;
+            font-size: clamp(2.8rem, 8vw, 5.5rem);
+            font-weight: 700;
+            letter-spacing: 0.6em;
+            color: #f0f4ff;
+            text-shadow:
+                0 0 20px rgba(180, 210, 255, 0.8),
+                0 0 60px rgba(180, 210, 255, 0.4),
+                0 0 120px rgba(120, 170, 255, 0.2);
+            line-height: 1.2;
+        }
+
+        #title-screen .title-sub {
+            font-family: 'Noto Serif TC', serif;
+            font-size: clamp(0.85rem, 2.2vw, 1.25rem);
+            letter-spacing: 0.35em;
+            color: rgba(200, 220, 255, 0.75);
+            text-shadow: 0 0 12px rgba(180, 210, 255, 0.5);
+        }
+
+        #title-screen .title-divider {
+            width: 120px;
+            height: 1px;
+            background: linear-gradient(to right, transparent, rgba(200, 220, 255, 0.5), transparent);
+        }
+
+        #title-screen .title-start {
+            font-family: 'Noto Serif TC', serif;
+            font-size: clamp(0.8rem, 1.8vw, 1rem);
+            letter-spacing: 0.4em;
+            color: rgba(200, 220, 255, 0.6);
+            animation: blink-start 2s ease-in-out infinite;
+            margin-top: 0.5rem;
+        }
+
+        @keyframes blink-start {
+            0%, 100% { opacity: 0.25; }
+            50% { opacity: 0.9; }
+        }
+    </style>
+</head>
+<body class="relative text-gray-200">
+
+    <!-- 封面畫面 -->
+    <div id="title-screen">
+        <div class="cover-bg"></div>
+        <div class="cover-overlay"></div>
+        <div class="title-content">
+            <h1 class="title-zh">天寺夜遊</h1>
+            <div class="title-divider"></div>
+            <p class="title-sub">記承天寺夜遊　蘇軾</p>
+            <p class="title-start">按任意鍵 / 點擊畫面 開始</p>
+        </div>
+    </div>
+
+    <!-- 遊戲畫布 -->
+    <canvas id="game-canvas"></canvas>
+
+    <!-- UI 覆蓋層 -->
+    <div id="ui-layer" class="absolute inset-0 pointer-events-none flex flex-col justify-between p-8">
+        
+        <!-- 頂部詩句顯示區 -->
+        <div class="flex justify-center mt-10">
+            <h1 id="poem-text" class="text-2xl md:text-4xl tracking-[0.5em] text-white text-glow opacity-0 fade-transition" style="writing-mode: vertical-rl;">
+                月色入戶，欣然起行
+            </h1>
+        </div>
+
+        <!-- 底部互動提示與對話 -->
+        <div class="flex flex-col items-center mb-20 md:mb-10">
+            <p id="dialogue-text" class="text-lg md:text-xl text-gray-300 opacity-0 fade-transition tracking-widest text-center max-w-2xl px-4 py-2 bg-black/30 rounded-lg backdrop-blur-sm">
+                <!-- 提示文字將在這裡顯示 -->
+            </p>
+        </div>
+    </div>
+
+    <!-- 手機端虛擬按鍵 (觸控設備可見) -->
+    <div id="mobile-controls" class="absolute bottom-8 left-0 right-0 flex justify-between px-8 md:hidden pointer-events-auto opacity-70">
+        <div class="flex gap-4">
+            <button id="btn-left" class="w-16 h-16 rounded-full bg-white/10 border border-white/30 flex items-center justify-center backdrop-blur-md active:bg-white/30 transition-colors">
+                <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
+            </button>
+            <button id="btn-right" class="w-16 h-16 rounded-full bg-white/10 border border-white/30 flex items-center justify-center backdrop-blur-md active:bg-white/30 transition-colors">
+                <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+            </button>
+        </div>
+        <button id="btn-action" class="w-16 h-16 rounded-full bg-blue-500/20 border border-blue-200/50 flex items-center justify-center backdrop-blur-md active:bg-blue-500/50 transition-colors text-white font-bold tracking-widest">
+            互動
+        </button>
+    </div>
+
+    <!-- 遊戲邏輯腳本 -->
+    <script>
+        const canvas = document.getElementById('game-canvas');
+        const ctx = canvas.getContext('2d');
+        
+        let cw, ch;
+        function resize() {
+            cw = canvas.width = window.innerWidth;
+            ch = canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        // 遊戲核心變數
+        const camera = { x: 0, targetX: 0 };
+        const keys = { left: false, right: false, action: false };
+        let gameTime = 0;
+        
+        // 玩家狀態
+        const player = {
+            x: 200,
+            y: ch - 150, // 稍後在 resize 中更新
+            vx: 0,
+            speed: 3,
+            isMoving: false,
+            idleTimer: 0,
+            facingRight: true,
+            hasMetFriend: false
+        };
+
+        // 朋友 (張懷民) 狀態
+        const friend = {
+            x: 2200, // 初始位置在遠方
+            y: ch - 150,
+            active: false
+        };
+
+        // 解謎狀態
+        const puzzle = {
+            x: 1000,
+            angle1: 0,
+            angle2: Math.PI / 2, // 初始影子角度不交疊
+            solved: false,
+            waterLevel: 0 // 觸發積水空明後的水位特效動畫值
+        };
+
+        // 劇情進度
+        let currentStage = 0; 
+        const POEMS = [
+            "解衣欲睡，月色入戶，欣然起行。",
+            "庭下如積水空明，水中藻、荇交橫，蓋竹柏影也。",
+            "念無與為樂者，遂至承天寺尋張懷民。",
+            "相與步於中庭。",
+            "何夜無月？何處無竹柏？但少閑人如吾兩人者耳。"
+        ];
+
+        const poemEl = document.getElementById('poem-text');
+        const dialogEl = document.getElementById('dialogue-text');
+        let currentDialogText = "";
+        let dialogTimeout;
+
+        function showDialog(text, duration = 4000) {
+            if (currentDialogText === text) return;
+            currentDialogText = text;
+            dialogEl.innerText = text;
+            dialogEl.style.opacity = 1;
+            clearTimeout(dialogTimeout);
+            
+            if (duration > 0) {
+                dialogTimeout = setTimeout(() => {
+                    dialogEl.style.opacity = 0;
+                    currentDialogText = "";
+                }, duration);
+            }
+        }
+
+        function showPoem(index) {
+            if (poemEl.innerText !== POEMS[index]) {
+                poemEl.style.opacity = 0;
+                setTimeout(() => {
+                    poemEl.innerText = POEMS[index];
+                    poemEl.style.opacity = 1;
+                }, 1500);
+            } else {
+                poemEl.style.opacity = 1;
+            }
+        }
+
+        // 鍵盤控制
+        window.addEventListener('keydown', (e) => {
+            if (!gameStarted) return; // 封面期間不處理遊戲按鍵
+            if (e.key === 'ArrowLeft' || e.key === 'a') keys.left = true;
+            if (e.key === 'ArrowRight' || e.key === 'd') keys.right = true;
+            if (e.key === 'e' || e.key === 'E' || e.key === ' ') {
+                if (!keys.action) triggerAction();
+                keys.action = true;
+            }
+        });
+
+        window.addEventListener('keyup', (e) => {
+            if (e.key === 'ArrowLeft' || e.key === 'a') keys.left = false;
+            if (e.key === 'ArrowRight' || e.key === 'd') keys.right = false;
+            if (e.key === 'e' || e.key === 'E' || e.key === ' ') keys.action = false;
+        });
+
+        // 觸控控制
+        const btnLeft = document.getElementById('btn-left');
+        const btnRight = document.getElementById('btn-right');
+        const btnAction = document.getElementById('btn-action');
+
+        const bindTouch = (el, keyObj, keyName) => {
+            el.addEventListener('touchstart', (e) => { e.preventDefault(); keyObj[keyName] = true; });
+            el.addEventListener('touchend', (e) => { e.preventDefault(); keyObj[keyName] = false; });
+            el.addEventListener('mousedown', (e) => { e.preventDefault(); keyObj[keyName] = true; });
+            el.addEventListener('mouseup', (e) => { e.preventDefault(); keyObj[keyName] = false; });
+            el.addEventListener('mouseleave', (e) => { e.preventDefault(); keyObj[keyName] = false; });
+        };
+
+        bindTouch(btnLeft, keys, 'left');
+        bindTouch(btnRight, keys, 'right');
+        
+        btnAction.addEventListener('touchstart', (e) => { e.preventDefault(); triggerAction(); });
+        btnAction.addEventListener('mousedown', (e) => { e.preventDefault(); triggerAction(); });
+
+
+        function drawBackground(ctx, cw, ch) {
+            // 夜空漸層
+            const skyGradient = ctx.createLinearGradient(0, 0, 0, ch);
+            skyGradient.addColorStop(0, '#05060a');
+            skyGradient.addColorStop(1, '#11131a');
+            ctx.fillStyle = skyGradient;
+            ctx.fillRect(0, 0, cw, ch);
+
+            // 繪製月亮 (視差滾動)
+            const moonX = cw * 0.8 - (camera.x * 0.05);
+            const moonY = ch * 0.25;
+            
+            ctx.save();
+            // 月暈
+            ctx.beginPath();
+            ctx.arc(moonX, moonY, 150, 0, Math.PI * 2);
+            const glowGradient = ctx.createRadialGradient(moonX, moonY, 40, moonX, moonY, 150);
+            // 閒人機制：站立越久，月光越亮
+            let moonGlow = 0.1 + Math.min(player.idleTimer / 10000, 0.15); 
+            glowGradient.addColorStop(0, `rgba(220, 230, 255, ${moonGlow + 0.2})`);
+            glowGradient.addColorStop(1, 'rgba(220, 230, 255, 0)');
+            ctx.fillStyle = glowGradient;
+            ctx.fill();
+
+            // 月亮本體
+            ctx.beginPath();
+            ctx.arc(moonX, moonY, 40, 0, Math.PI * 2);
+            ctx.fillStyle = '#f0f4ff';
+            ctx.shadowBlur = 20;
+            ctx.shadowColor = '#fff';
+            ctx.fill();
+            ctx.restore();
+            
+            // 地面線
+            const groundY = ch - 120;
+            ctx.fillStyle = '#0a0a0d';
+            ctx.fillRect(0, groundY, cw, ch - groundY);
+        }
+
+        function drawTree(ctx, x, groundY, scale = 1, parallax = 1) {
+            const screenX = x - camera.x * parallax;
+            if (screenX < -200 || screenX > cw + 200) return; // Culling
+
+            ctx.save();
+            ctx.translate(screenX, groundY);
+            ctx.scale(scale, scale);
+            
+            ctx.fillStyle = '#030304'; // 極黑剪影
+            // 簡單的枯樹剪影
+            ctx.beginPath();
+            ctx.moveTo(-10, 0);
+            ctx.lineTo(-5, -150);
+            ctx.lineTo(-40, -200);
+            ctx.lineTo(-30, -210);
+            ctx.lineTo(-2, -160);
+            ctx.lineTo(0, -250);
+            ctx.lineTo(8, -250);
+            ctx.lineTo(5, -160);
+            ctx.lineTo(40, -190);
+            ctx.lineTo(45, -180);
+            ctx.lineTo(10, -140);
+            ctx.lineTo(15, 0);
+            ctx.fill();
+            ctx.restore();
+        }
+
+        function drawWaterEffect(ctx, cw, ch, groundY) {
+            if (puzzle.waterLevel <= 0) return;
+
+            ctx.save();
+            ctx.globalAlpha = Math.min(puzzle.waterLevel, 0.6); // 水的透明度
+            ctx.globalCompositeOperation = 'screen'; // 讓水有發光的感覺
+
+            // 繪製多層波浪
+            for(let layer = 0; layer < 3; layer++) {
+                ctx.beginPath();
+                ctx.moveTo(0, ch);
+                let waveBaseY = groundY + (layer * 15);
+                
+                for(let x = 0; x <= cw; x += 20) {
+                    // 利用 sine wave 創造波紋，加入 camera.x 製造流動感
+                    let timeOffset = gameTime * 0.001 * (layer + 1);
+                    let spaceOffset = (x + camera.x) * 0.01;
+                    let y = waveBaseY + Math.sin(timeOffset + spaceOffset) * 8;
+                    ctx.lineTo(x, y);
+                }
+                ctx.lineTo(cw, ch);
+                
+                // 水的漸層顏色，帶點銀藍色的月光感
+                let waterGrad = ctx.createLinearGradient(0, waveBaseY, 0, ch);
+                waterGrad.addColorStop(0, `rgba(130, 170, 255, ${0.3 - layer*0.1})`);
+                waterGrad.addColorStop(1, 'rgba(130, 170, 255, 0)');
+                ctx.fillStyle = waterGrad;
+                ctx.fill();
+            }
+            ctx.restore();
+        }
+
+        function drawPuzzleArea(ctx, groundY) {
+            const screenX = puzzle.x - camera.x;
+            if (screenX < -300 || screenX > cw + 300) return;
+
+            ctx.save();
+            ctx.translate(screenX, groundY);
+            
+            // 繪製盆栽本體 (剪影)
+            ctx.fillStyle = '#080808';
+            ctx.fillRect(-30, -40, 60, 40);
+            
+            // 繪製地上的影子 (積水空明解謎)
+            ctx.save();
+            // 影子變形矩陣，使其看起來躺在地上
+            ctx.transform(1, 0, -1.2, 0.4, 0, 0); 
+            
+            // 根據是否解開，改變影子的顏色。未解開是黑影，解開後變為水中倒影(偏藍白)
+            if (puzzle.solved && puzzle.waterLevel > 0.5) {
+                ctx.strokeStyle = `rgba(150, 200, 255, ${puzzle.waterLevel * 0.5})`;
+                ctx.shadowBlur = 10;
+                ctx.shadowColor = '#96c8ff';
+            } else {
+                ctx.strokeStyle = 'rgba(0, 0, 0, 0.6)';
+                ctx.shadowBlur = 0;
+            }
+            
+            ctx.lineWidth = 4;
+            ctx.lineCap = 'round';
+
+            // 繪製竹子/柏樹的影子 (由旋轉角度決定)
+            const drawShadowBranch = (angle, length, width) => {
+                ctx.save();
+                ctx.rotate(angle);
+                ctx.lineWidth = width;
+                ctx.beginPath();
+                ctx.moveTo(0, 0);
+                ctx.lineTo(0, -length);
+                ctx.stroke();
+                // 畫點葉子
+                ctx.moveTo(0, -length * 0.5); ctx.lineTo(-15, -length * 0.7); ctx.stroke();
+                ctx.moveTo(0, -length * 0.7); ctx.lineTo(15, -length * 0.9); ctx.stroke();
+                ctx.restore();
+            };
+
+            // 兩組影子，玩家互動時會改變角度
+            drawShadowBranch(puzzle.angle1, 150, 6);
+            drawShadowBranch(puzzle.angle2, 120, 4);
+
+            ctx.restore();
+            ctx.restore();
+        }
+
+        function drawCharacter(ctx, x, groundY, facingRight, isFriend = false, alpha = 1) {
+            const screenX = x - camera.x;
+            if (screenX < -100 || screenX > cw + 100) return;
+
+            ctx.save();
+            ctx.translate(screenX, groundY);
+            ctx.globalAlpha = alpha;
+            if (!facingRight) ctx.scale(-1, 1);
+
+            // 繪製古代文人剪影 (蘇軾/張懷民)
+            ctx.fillStyle = '#020202'; // 極深
+            
+            // 身體 (長袍)
+            ctx.beginPath();
+            ctx.moveTo(0, -70); // 脖子
+            ctx.bezierCurveTo(15, -60, 25, -20, 20, 0); // 背部/長袍後襬
+            ctx.lineTo(-20, 0); // 底部
+            ctx.bezierCurveTo(-15, -20, -10, -60, 0, -70); // 前胸
+            ctx.fill();
+
+            // 頭部
+            ctx.beginPath();
+            ctx.arc(2, -78, 8, 0, Math.PI * 2);
+            ctx.fill();
+
+            // 頭巾/帽子 (東坡巾)
+            ctx.fillRect(-5, -92, 12, 10);
+            ctx.fillRect(-8, -88, 3, 6);
+
+            // 手部 (交疊在身前或背後)
+            ctx.beginPath();
+            ctx.moveTo(0, -60);
+            ctx.bezierCurveTo(10, -50, 15, -45, 12, -35);
+            ctx.lineWidth = 4;
+            ctx.strokeStyle = '#020202';
+            ctx.stroke();
+
+            // 月光邊緣光 (Rim Light) - 營造氛圍感
+            ctx.shadowBlur = 4;
+            ctx.shadowColor = 'rgba(200, 220, 255, 0.4)';
+            ctx.strokeStyle = 'rgba(200, 220, 255, 0.2)';
+            ctx.lineWidth = 1;
+            ctx.stroke(); // 為剛才的路徑加上微弱的白邊
+
+            ctx.restore();
+        }
+
+        function triggerAction() {
+            // 檢查是否在盆栽附近
+            if (Math.abs(player.x - puzzle.x) < 80) {
+                if (!puzzle.solved) {
+                    // 每次互動轉動影子
+                    puzzle.angle1 += 0.2;
+                    puzzle.angle2 -= 0.15;
+                    
+                    // 判斷是否交疊 (「水中藻、荇交橫」)
+                    // 將角度標準化比較
+                    let a1 = puzzle.angle1 % (Math.PI * 2);
+                    let a2 = puzzle.angle2 % (Math.PI * 2);
+                    let diff = Math.abs(a1 - a2);
+                    
+                    // 如果角度接近，解謎成功
+                    if (diff < 0.3 || Math.abs(diff - Math.PI) < 0.3) {
+                        puzzle.solved = true;
+                        showDialog("「庭下如積水空明，水中藻、荇交橫，蓋竹柏影也。」", 6000);
+                        showPoem(1);
+                        currentStage = 1;
+                    } else {
+                        showDialog("移動盆栽，使竹柏之影交疊...", 2000);
+                    }
+                } else {
+                    showDialog("月色如水，空明澄澈。", 3000);
+                }
+            } 
+            // 檢查是否在朋友附近
+            else if (Math.abs(player.x - friend.x) < 100 && !player.hasMetFriend) {
+                player.hasMetFriend = true;
+                friend.active = true;
+                showDialog("「懷民亦未寢，相與步於中庭。」", 5000);
+                showPoem(3);
+                currentStage = 2;
+            }
+        }
+
+        function update(deltaTime) {
+            // 物理與移動
+            player.isMoving = false;
+            if (keys.left) {
+                player.vx -= 0.5;
+                player.facingRight = false;
+                player.isMoving = true;
+            }
+            if (keys.right) {
+                player.vx += 0.5;
+                player.facingRight = true;
+                player.isMoving = true;
+            }
+
+            // 摩擦力與最大速度限制
+            player.vx *= 0.85; 
+            if (player.vx > player.speed) player.vx = player.speed;
+            if (player.vx < -player.speed) player.vx = -player.speed;
+            
+            player.x += player.vx;
+            
+            // 邊界限制
+            if (player.x < 0) player.x = 0;
+            if (player.x > 3000) player.x = 3000;
+
+            // 攝影機跟隨 (平滑移動 Lerp)
+            camera.targetX = player.x - cw * 0.3; // 讓玩家保持在畫面偏左/中
+            // 如果玩家往左走，鏡頭稍微往右偏移
+            if(!player.facingRight) camera.targetX = player.x - cw * 0.7;
+            
+            // 限制攝影機邊界
+            if (camera.targetX < 0) camera.targetX = 0;
+            if (camera.targetX > 3000 - cw) camera.targetX = 3000 - cw;
+
+            camera.x += (camera.targetX - camera.x) * 0.05;
+
+            // 朋友跟隨邏輯
+            if (friend.active) {
+                const dist = player.x - friend.x;
+                // 保持一段距離跟隨
+                if (Math.abs(dist) > 80) {
+                    friend.x += (dist > 0 ? 1 : -1) * (player.speed * 0.9);
+                }
+            }
+
+            // 閒人機制 (Idle Mechanic)
+            if (!player.isMoving && Math.abs(player.vx) < 0.1) {
+                player.idleTimer += deltaTime;
+                
+                // 站立超過特定時間觸發效果
+                if (player.idleTimer > 3000 && currentStage === 0 && player.x < 500) {
+                    showPoem(0);
+                }
+                
+                // 遊戲結局：找到張懷民後，兩人一起站著不動
+                if (currentStage === 2 && player.idleTimer > 4000) {
+                    showPoem(4);
+                    showDialog("「但少閑人如吾兩人者耳。」", -1); // 永久顯示
+                }
+            } else {
+                player.idleTimer = 0;
+            }
+
+            // 水面特效動畫更新
+            if (puzzle.solved && puzzle.waterLevel < 1) {
+                puzzle.waterLevel += deltaTime * 0.0005; // 慢慢浮現水面
+            }
+
+            // 區域提示事件
+            if (currentStage === 0 && player.x > 800 && player.x < 1200 && !puzzle.solved) {
+                if(dialogEl.style.opacity == 0) showDialog("前方庭院似有月影... (按 互動鍵 整理盆栽)", 3000);
+            }
+            if (currentStage === 1 && player.x > 1800 && player.x < 2200 && !player.hasMetFriend) {
+                if(dialogEl.style.opacity == 0) showDialog("承天寺到了，或許能尋見故人...", 3000);
+                showPoem(2);
+            }
+        }
+
+        let lastTime = performance.now();
+
+        function gameLoop(currentTime) {
+            const deltaTime = currentTime - lastTime;
+            lastTime = currentTime;
+            gameTime = currentTime;
+
+            update(deltaTime);
+
+            // 清除畫布
+            ctx.clearRect(0, 0, cw, ch);
+            
+            // 繪製順序：背景 -> 遠景 -> 特效 -> 互動實體 -> 角色 -> 前景
+            drawBackground(ctx, cw, ch);
+            
+            const groundY = ch - 120;
+            
+            // 遠景樹木 (視差)
+            drawTree(ctx, 300, groundY, 0.8, 0.2);
+            drawTree(ctx, 800, groundY, 1, 0.3);
+            drawTree(ctx, 1600, groundY, 0.9, 0.25);
+            drawTree(ctx, 2400, groundY, 1.2, 0.3);
+
+            // 中景樹木
+            drawTree(ctx, 600, groundY, 1.2, 0.6);
+            drawTree(ctx, 1400, groundY, 1.5, 0.7);
+
+            // 解謎區域與影子
+            drawPuzzleArea(ctx, groundY);
+
+            // 水面特效 (積水空明)
+            drawWaterEffect(ctx, cw, ch, groundY);
+
+            // 繪製朋友 (張懷民) - 如果已經走到承天寺範圍
+            if (player.x > 1200 || friend.active) {
+                 // 朋友面向玩家
+                let friendFacingRight = friend.x < player.x;
+                drawCharacter(ctx, friend.x, groundY, friendFacingRight, true);
+            }
+
+            // 繪製玩家 (蘇軾)
+            drawCharacter(ctx, player.x, groundY, player.facingRight);
+
+            // 近景遮擋物 (增加深度)
+            drawTree(ctx, 100, groundY + 50, 2, 1.5);
+            drawTree(ctx, 1900, groundY + 80, 2.5, 1.8);
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        // 封面控制
+        let gameStarted = false;
+
+        function startGame() {
+            if (gameStarted) return;
+            gameStarted = true;
+
+            const titleScreen = document.getElementById('title-screen');
+            titleScreen.style.opacity = '0';
+            titleScreen.style.pointerEvents = 'none';
+
+            setTimeout(() => {
+                titleScreen.style.display = 'none';
+            }, 1600);
+
+            // 初始顯示
+            setTimeout(() => { showPoem(0); }, 1000);
+            setTimeout(() => { showDialog("使用 A/D 或 左右鍵 移動，E 鍵 互動。停下腳步，感受月色。", 5000); }, 3000);
+        }
+
+        window.onload = () => {
+            const titleScreen = document.getElementById('title-screen');
+
+            // 點擊或按鍵開始遊戲
+            titleScreen.addEventListener('click', startGame);
+            window.addEventListener('keydown', (e) => {
+                // 避免在封面按鍵觸發遊戲操作
+                if (!gameStarted) { startGame(); }
+            }, { once: false });
+
+            // 啟動遊戲迴圈（封面期間也渲染背景，視覺更流暢）
+            requestAnimationFrame(gameLoop);
+        };
+
+    </script>
+</body>
+</html>
